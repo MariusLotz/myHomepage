@@ -1,0 +1,860 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="profile" href="http://gmpg.org/xfn/11">
+<link rel="pingback" href="https://simon-martin.net/xmlrpc.php">
+
+<title>Martin Simon&#039;s research blog</title>
+<meta name='robots' content='max-image-preview:large' />
+
+<!-- Async WordPress.com Remote Login -->
+<script id="wpcom_remote_login_js">
+var wpcom_remote_login_extra_auth = '';
+function wpcom_remote_login_remove_dom_node_id( element_id ) {
+	var dom_node = document.getElementById( element_id );
+	if ( dom_node ) { dom_node.parentNode.removeChild( dom_node ); }
+}
+function wpcom_remote_login_remove_dom_node_classes( class_name ) {
+	var dom_nodes = document.querySelectorAll( '.' + class_name );
+	for ( var i = 0; i < dom_nodes.length; i++ ) {
+		dom_nodes[ i ].parentNode.removeChild( dom_nodes[ i ] );
+	}
+}
+function wpcom_remote_login_final_cleanup() {
+	wpcom_remote_login_remove_dom_node_classes( "wpcom_remote_login_msg" );
+	wpcom_remote_login_remove_dom_node_id( "wpcom_remote_login_key" );
+	wpcom_remote_login_remove_dom_node_id( "wpcom_remote_login_validate" );
+	wpcom_remote_login_remove_dom_node_id( "wpcom_remote_login_js" );
+	wpcom_remote_login_remove_dom_node_id( "wpcom_request_access_iframe" );
+	wpcom_remote_login_remove_dom_node_id( "wpcom_request_access_styles" );
+}
+
+// Watch for messages back from the remote login
+window.addEventListener( "message", function( e ) {
+	if ( e.origin === "https://r-login.wordpress.com" ) {
+		var data = {};
+		try {
+			data = JSON.parse( e.data );
+		} catch( e ) {
+			wpcom_remote_login_final_cleanup();
+			return;
+		}
+
+		if ( data.msg === 'LOGIN' ) {
+			// Clean up the login check iframe
+			wpcom_remote_login_remove_dom_node_id( "wpcom_remote_login_key" );
+
+			var id_regex = new RegExp( /^[0-9]+$/ );
+			var token_regex = new RegExp( /^.*|.*|.*$/ );
+			if (
+				token_regex.test( data.token )
+				&& id_regex.test( data.wpcomid )
+			) {
+				// We have everything we need to ask for a login
+				var script = document.createElement( "script" );
+				script.setAttribute( "id", "wpcom_remote_login_validate" );
+				script.src = '/remote-login.php?wpcom_remote_login=validate'
+					+ '&wpcomid=' + data.wpcomid
+					+ '&token=' + encodeURIComponent( data.token )
+					+ '&host=' + window.location.protocol
+					+ '//' + window.location.hostname
+					+ '&postid=331'
+					+ '&is_singular=';
+				document.body.appendChild( script );
+			}
+
+			return;
+		}
+
+		// Safari ITP, not logged in, so redirect
+		if ( data.msg === 'LOGIN-REDIRECT' ) {
+			window.location = 'https://wordpress.com/log-in?redirect_to=' + window.location.href;
+			return;
+		}
+
+		// Safari ITP, storage access failed, remove the request
+		if ( data.msg === 'LOGIN-REMOVE' ) {
+			var css_zap = 'html { -webkit-transition: margin-top 1s; transition: margin-top 1s; } /* 9001 */ html { margin-top: 0 !important; } * html body { margin-top: 0 !important; } @media screen and ( max-width: 782px ) { html { margin-top: 0 !important; } * html body { margin-top: 0 !important; } }';
+			var style_zap = document.createElement( 'style' );
+			style_zap.type = 'text/css';
+			style_zap.appendChild( document.createTextNode( css_zap ) );
+			document.body.appendChild( style_zap );
+
+			var e = document.getElementById( 'wpcom_request_access_iframe' );
+			e.parentNode.removeChild( e );
+
+			document.cookie = 'wordpress_com_login_access=denied; path=/; max-age=31536000';
+
+			return;
+		}
+
+		// Safari ITP
+		if ( data.msg === 'REQUEST_ACCESS' ) {
+			console.log( 'request access: safari' );
+
+			// Check ITP iframe enable/disable knob
+			if ( wpcom_remote_login_extra_auth !== 'safari_itp_iframe' ) {
+				return;
+			}
+
+			// If we are in a "private window" there is no ITP.
+			var private_window = false;
+			try {
+				var opendb = window.openDatabase( null, null, null, null );
+			} catch( e ) {
+				private_window = true;
+			}
+
+			if ( private_window ) {
+				console.log( 'private window' );
+				return;
+			}
+
+			var iframe = document.createElement( 'iframe' );
+			iframe.id = 'wpcom_request_access_iframe';
+			iframe.setAttribute( 'scrolling', 'no' );
+			iframe.setAttribute( 'sandbox', 'allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-top-navigation-by-user-activation' );
+			iframe.src = 'https://r-login.wordpress.com/remote-login.php?wpcom_remote_login=request_access&origin=' + encodeURIComponent( data.origin ) + '&wpcomid=' + encodeURIComponent( data.wpcomid );
+
+			var css = 'html { -webkit-transition: margin-top 1s; transition: margin-top 1s; } /* 9001 */ html { margin-top: 46px !important; } * html body { margin-top: 46px !important; } @media screen and ( max-width: 660px ) { html { margin-top: 71px !important; } * html body { margin-top: 71px !important; } #wpcom_request_access_iframe { display: block; height: 71px !important; } } #wpcom_request_access_iframe { border: 0px; height: 46px; position: fixed; top: 0; left: 0; width: 100%; min-width: 100%; z-index: 99999; background: #23282d; } ';
+
+			var style = document.createElement( 'style' );
+			style.type = 'text/css';
+			style.id = 'wpcom_request_access_styles';
+			style.appendChild( document.createTextNode( css ) );
+			document.body.appendChild( style );
+
+			document.body.appendChild( iframe );
+		}
+
+		if ( data.msg === 'DONE' ) {
+			wpcom_remote_login_final_cleanup();
+		}
+	}
+}, false );
+
+// Inject the remote login iframe after the page has had a chance to load
+// more critical resources
+window.addEventListener( "DOMContentLoaded", function( e ) {
+	var iframe = document.createElement( "iframe" );
+	iframe.style.display = "none";
+	iframe.setAttribute( "scrolling", "no" );
+	iframe.setAttribute( "id", "wpcom_remote_login_key" );
+	iframe.src = "https://r-login.wordpress.com/remote-login.php"
+		+ "?wpcom_remote_login=key"
+		+ "&origin=aHR0cHM6Ly9zaW1vbi1tYXJ0aW4ubmV0"
+		+ "&wpcomid=93232423"
+		+ "&time=1685231008";
+	document.body.appendChild( iframe );
+}, false );
+</script>
+<link rel='dns-prefetch' href='//s0.wp.com' />
+<link rel='dns-prefetch' href='//fonts-api.wp.com' />
+<link href='https://fonts.gstatic.com' crossorigin rel='preconnect' />
+<link rel="alternate" type="application/rss+xml" title="Martin Simon&#039;s research blog &raquo; Feed" href="https://simon-martin.net/feed/" />
+<link rel="alternate" type="application/rss+xml" title="Martin Simon&#039;s research blog &raquo; Comments Feed" href="https://simon-martin.net/comments/feed/" />
+	<script type="text/javascript">
+		/* <![CDATA[ */
+		function addLoadEvent(func) {
+			var oldonload = window.onload;
+			if (typeof window.onload != 'function') {
+				window.onload = func;
+			} else {
+				window.onload = function () {
+					oldonload();
+					func();
+				}
+			}
+		}
+		/* ]]> */
+	</script>
+	<script type="text/javascript">
+window._wpemojiSettings = {"baseUrl":"https:\/\/s0.wp.com\/wp-content\/mu-plugins\/wpcom-smileys\/twemoji\/2\/72x72\/","ext":".png","svgUrl":"https:\/\/s0.wp.com\/wp-content\/mu-plugins\/wpcom-smileys\/twemoji\/2\/svg\/","svgExt":".svg","source":{"concatemoji":"https:\/\/s0.wp.com\/wp-includes\/js\/wp-emoji-release.min.js?m=1677072837h&ver=6.2.1-RC1-55769"}};
+/*! This file is auto-generated */
+!function(e,a,t){var n,r,o,i=a.createElement("canvas"),p=i.getContext&&i.getContext("2d");function s(e,t){p.clearRect(0,0,i.width,i.height),p.fillText(e,0,0);e=i.toDataURL();return p.clearRect(0,0,i.width,i.height),p.fillText(t,0,0),e===i.toDataURL()}function c(e){var t=a.createElement("script");t.src=e,t.defer=t.type="text/javascript",a.getElementsByTagName("head")[0].appendChild(t)}for(o=Array("flag","emoji"),t.supports={everything:!0,everythingExceptFlag:!0},r=0;r<o.length;r++)t.supports[o[r]]=function(e){if(p&&p.fillText)switch(p.textBaseline="top",p.font="600 32px Arial",e){case"flag":return s("\ud83c\udff3\ufe0f\u200d\u26a7\ufe0f","\ud83c\udff3\ufe0f\u200b\u26a7\ufe0f")?!1:!s("\ud83c\uddfa\ud83c\uddf3","\ud83c\uddfa\u200b\ud83c\uddf3")&&!s("\ud83c\udff4\udb40\udc67\udb40\udc62\udb40\udc65\udb40\udc6e\udb40\udc67\udb40\udc7f","\ud83c\udff4\u200b\udb40\udc67\u200b\udb40\udc62\u200b\udb40\udc65\u200b\udb40\udc6e\u200b\udb40\udc67\u200b\udb40\udc7f");case"emoji":return!s("\ud83e\udef1\ud83c\udffb\u200d\ud83e\udef2\ud83c\udfff","\ud83e\udef1\ud83c\udffb\u200b\ud83e\udef2\ud83c\udfff")}return!1}(o[r]),t.supports.everything=t.supports.everything&&t.supports[o[r]],"flag"!==o[r]&&(t.supports.everythingExceptFlag=t.supports.everythingExceptFlag&&t.supports[o[r]]);t.supports.everythingExceptFlag=t.supports.everythingExceptFlag&&!t.supports.flag,t.DOMReady=!1,t.readyCallback=function(){t.DOMReady=!0},t.supports.everything||(n=function(){t.readyCallback()},a.addEventListener?(a.addEventListener("DOMContentLoaded",n,!1),e.addEventListener("load",n,!1)):(e.attachEvent("onload",n),a.attachEvent("onreadystatechange",function(){"complete"===a.readyState&&t.readyCallback()})),(e=t.source||{}).concatemoji?c(e.concatemoji):e.wpemoji&&e.twemoji&&(c(e.twemoji),c(e.wpemoji)))}(window,document,window._wpemojiSettings);
+</script>
+<style type="text/css">
+img.wp-smiley,
+img.emoji {
+	display: inline !important;
+	border: none !important;
+	box-shadow: none !important;
+	height: 1em !important;
+	width: 1em !important;
+	margin: 0 0.07em !important;
+	vertical-align: -0.1em !important;
+	background: none !important;
+	padding: 0 !important;
+}
+</style>
+	<link crossorigin='anonymous' rel='stylesheet' id='all-css-0-1' href='https://s0.wp.com/_static/??-eJyFkt1OwzAMhV+I1Avaxm4Qj4LSxCoe+VOcdOrbY8padYKxm0jH8edjO4FLVjbFirFC9m2gyDA0kT2WQW4KwqgP3UunoW/kHfQ+2U/lqS+mTMB18thZ5ifYFApNLbXOWLMR4EcDt7iE3keMLhUwraZgaiW7Jo/kMOWCzDem6KgKMAuGOUlOvKz+FK1vDsWVIUi2QY9hbmgjsjcTFuVxMHbqAsXHuNxt9Q10f3nXPpehxDa1qoZC7s7aHpYoplIc+AFu0xV77vSp04opZI+q4NjtwRHXNUPdFlrnlwBYb5jJqvohM/OfI2+e+fujSDxk83tb/2CXLIzq+/mtlZyBWlgshXsLr/p4Omh92B135y84MgDT&cssminify=yes' type='text/css' media='all' />
+<style id='wp-block-library-inline-css'>
+.has-text-align-justify {
+	text-align:justify;
+}
+.wp-block-cover__image-background.has-parallax {
+	background-size: cover;
+}
+</style>
+<style id='global-styles-inline-css'>
+body{--wp--preset--color--black: #000000;--wp--preset--color--cyan-bluish-gray: #abb8c3;--wp--preset--color--white: #ffffff;--wp--preset--color--pale-pink: #f78da7;--wp--preset--color--vivid-red: #cf2e2e;--wp--preset--color--luminous-vivid-orange: #ff6900;--wp--preset--color--luminous-vivid-amber: #fcb900;--wp--preset--color--light-green-cyan: #7bdcb5;--wp--preset--color--vivid-green-cyan: #00d084;--wp--preset--color--pale-cyan-blue: #8ed1fc;--wp--preset--color--vivid-cyan-blue: #0693e3;--wp--preset--color--vivid-purple: #9b51e0;--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple: linear-gradient(135deg,rgba(6,147,227,1) 0%,rgb(155,81,224) 100%);--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan: linear-gradient(135deg,rgb(122,220,180) 0%,rgb(0,208,130) 100%);--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange: linear-gradient(135deg,rgba(252,185,0,1) 0%,rgba(255,105,0,1) 100%);--wp--preset--gradient--luminous-vivid-orange-to-vivid-red: linear-gradient(135deg,rgba(255,105,0,1) 0%,rgb(207,46,46) 100%);--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray: linear-gradient(135deg,rgb(238,238,238) 0%,rgb(169,184,195) 100%);--wp--preset--gradient--cool-to-warm-spectrum: linear-gradient(135deg,rgb(74,234,220) 0%,rgb(151,120,209) 20%,rgb(207,42,186) 40%,rgb(238,44,130) 60%,rgb(251,105,98) 80%,rgb(254,248,76) 100%);--wp--preset--gradient--blush-light-purple: linear-gradient(135deg,rgb(255,206,236) 0%,rgb(152,150,240) 100%);--wp--preset--gradient--blush-bordeaux: linear-gradient(135deg,rgb(254,205,165) 0%,rgb(254,45,45) 50%,rgb(107,0,62) 100%);--wp--preset--gradient--luminous-dusk: linear-gradient(135deg,rgb(255,203,112) 0%,rgb(199,81,192) 50%,rgb(65,88,208) 100%);--wp--preset--gradient--pale-ocean: linear-gradient(135deg,rgb(255,245,203) 0%,rgb(182,227,212) 50%,rgb(51,167,181) 100%);--wp--preset--gradient--electric-grass: linear-gradient(135deg,rgb(202,248,128) 0%,rgb(113,206,126) 100%);--wp--preset--gradient--midnight: linear-gradient(135deg,rgb(2,3,129) 0%,rgb(40,116,252) 100%);--wp--preset--font-size--small: 13px;--wp--preset--font-size--medium: 20px;--wp--preset--font-size--large: 36px;--wp--preset--font-size--x-large: 42px;--wp--preset--font-family--albert-sans: 'Albert Sans';--wp--preset--font-family--alegreya: Alegreya;--wp--preset--font-family--arvo: Arvo;--wp--preset--font-family--bodoni-moda: 'Bodoni Moda';--wp--preset--font-family--cabin: Cabin;--wp--preset--font-family--chivo: Chivo;--wp--preset--font-family--commissioner: Commissioner;--wp--preset--font-family--cormorant: Cormorant;--wp--preset--font-family--courier-prime: 'Courier Prime';--wp--preset--font-family--crimson-pro: 'Crimson Pro';--wp--preset--font-family--dm-mono: 'DM Mono';--wp--preset--font-family--dm-sans: 'DM Sans';--wp--preset--font-family--domine: Domine;--wp--preset--font-family--eb-garamond: 'EB Garamond';--wp--preset--font-family--epilogue: Epilogue;--wp--preset--font-family--figtree: Figtree;--wp--preset--font-family--fira-sans: 'Fira Sans';--wp--preset--font-family--fraunces: Fraunces;--wp--preset--font-family--ibm-plex-mono: 'IBM Plex Mono';--wp--preset--font-family--ibm-plex-sans: 'IBM Plex Sans';--wp--preset--font-family--inter: Inter;--wp--preset--font-family--josefin-sans: 'Josefin Sans';--wp--preset--font-family--jost: Jost;--wp--preset--font-family--libre-baskerville: 'Libre Baskerville';--wp--preset--font-family--libre-franklin: 'Libre Franklin';--wp--preset--font-family--literata: Literata;--wp--preset--font-family--lora: Lora;--wp--preset--font-family--merriweather: Merriweather;--wp--preset--font-family--montserrat: Montserrat;--wp--preset--font-family--newsreader: Newsreader;--wp--preset--font-family--nunito: Nunito;--wp--preset--font-family--open-sans: 'Open Sans';--wp--preset--font-family--overpass: Overpass;--wp--preset--font-family--petrona: Petrona;--wp--preset--font-family--piazzolla: Piazzolla;--wp--preset--font-family--playfair-display: 'Playfair Display';--wp--preset--font-family--plus-jakarta-sans: 'Plus Jakarta Sans';--wp--preset--font-family--poppins: Poppins;--wp--preset--font-family--raleway: Raleway;--wp--preset--font-family--roboto-slab: 'Roboto Slab';--wp--preset--font-family--roboto: Roboto;--wp--preset--font-family--rubik: Rubik;--wp--preset--font-family--sora: Sora;--wp--preset--font-family--source-sans-pro: 'Source Sans Pro';--wp--preset--font-family--source-serif-pro: 'Source Serif Pro';--wp--preset--font-family--space-mono: 'Space Mono';--wp--preset--font-family--texturina: Texturina;--wp--preset--font-family--work-sans: 'Work Sans';--wp--preset--spacing--20: 0.44rem;--wp--preset--spacing--30: 0.67rem;--wp--preset--spacing--40: 1rem;--wp--preset--spacing--50: 1.5rem;--wp--preset--spacing--60: 2.25rem;--wp--preset--spacing--70: 3.38rem;--wp--preset--spacing--80: 5.06rem;--wp--preset--shadow--natural: 6px 6px 9px rgba(0, 0, 0, 0.2);--wp--preset--shadow--deep: 12px 12px 50px rgba(0, 0, 0, 0.4);--wp--preset--shadow--sharp: 6px 6px 0px rgba(0, 0, 0, 0.2);--wp--preset--shadow--outlined: 6px 6px 0px -3px rgba(255, 255, 255, 1), 6px 6px rgba(0, 0, 0, 1);--wp--preset--shadow--crisp: 6px 6px 0px rgba(0, 0, 0, 1);}:where(.is-layout-flex){gap: 0.5em;}body .is-layout-flow > .alignleft{float: left;margin-inline-start: 0;margin-inline-end: 2em;}body .is-layout-flow > .alignright{float: right;margin-inline-start: 2em;margin-inline-end: 0;}body .is-layout-flow > .aligncenter{margin-left: auto !important;margin-right: auto !important;}body .is-layout-constrained > .alignleft{float: left;margin-inline-start: 0;margin-inline-end: 2em;}body .is-layout-constrained > .alignright{float: right;margin-inline-start: 2em;margin-inline-end: 0;}body .is-layout-constrained > .aligncenter{margin-left: auto !important;margin-right: auto !important;}body .is-layout-constrained > :where(:not(.alignleft):not(.alignright):not(.alignfull)){max-width: var(--wp--style--global--content-size);margin-left: auto !important;margin-right: auto !important;}body .is-layout-constrained > .alignwide{max-width: var(--wp--style--global--wide-size);}body .is-layout-flex{display: flex;}body .is-layout-flex{flex-wrap: wrap;align-items: center;}body .is-layout-flex > *{margin: 0;}body .is-layout-grid{display: grid;}body .is-layout-grid > *{margin: 0;}:where(.wp-block-columns.is-layout-flex){gap: 2em;}.has-black-color{color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-color{color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-color{color: var(--wp--preset--color--white) !important;}.has-pale-pink-color{color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-color{color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-color{color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-color{color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-color{color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-color{color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-color{color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-color{color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-color{color: var(--wp--preset--color--vivid-purple) !important;}.has-black-background-color{background-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-background-color{background-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-background-color{background-color: var(--wp--preset--color--white) !important;}.has-pale-pink-background-color{background-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-background-color{background-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-background-color{background-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-background-color{background-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-background-color{background-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-background-color{background-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-background-color{background-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-background-color{background-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-background-color{background-color: var(--wp--preset--color--vivid-purple) !important;}.has-black-border-color{border-color: var(--wp--preset--color--black) !important;}.has-cyan-bluish-gray-border-color{border-color: var(--wp--preset--color--cyan-bluish-gray) !important;}.has-white-border-color{border-color: var(--wp--preset--color--white) !important;}.has-pale-pink-border-color{border-color: var(--wp--preset--color--pale-pink) !important;}.has-vivid-red-border-color{border-color: var(--wp--preset--color--vivid-red) !important;}.has-luminous-vivid-orange-border-color{border-color: var(--wp--preset--color--luminous-vivid-orange) !important;}.has-luminous-vivid-amber-border-color{border-color: var(--wp--preset--color--luminous-vivid-amber) !important;}.has-light-green-cyan-border-color{border-color: var(--wp--preset--color--light-green-cyan) !important;}.has-vivid-green-cyan-border-color{border-color: var(--wp--preset--color--vivid-green-cyan) !important;}.has-pale-cyan-blue-border-color{border-color: var(--wp--preset--color--pale-cyan-blue) !important;}.has-vivid-cyan-blue-border-color{border-color: var(--wp--preset--color--vivid-cyan-blue) !important;}.has-vivid-purple-border-color{border-color: var(--wp--preset--color--vivid-purple) !important;}.has-vivid-cyan-blue-to-vivid-purple-gradient-background{background: var(--wp--preset--gradient--vivid-cyan-blue-to-vivid-purple) !important;}.has-light-green-cyan-to-vivid-green-cyan-gradient-background{background: var(--wp--preset--gradient--light-green-cyan-to-vivid-green-cyan) !important;}.has-luminous-vivid-amber-to-luminous-vivid-orange-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-amber-to-luminous-vivid-orange) !important;}.has-luminous-vivid-orange-to-vivid-red-gradient-background{background: var(--wp--preset--gradient--luminous-vivid-orange-to-vivid-red) !important;}.has-very-light-gray-to-cyan-bluish-gray-gradient-background{background: var(--wp--preset--gradient--very-light-gray-to-cyan-bluish-gray) !important;}.has-cool-to-warm-spectrum-gradient-background{background: var(--wp--preset--gradient--cool-to-warm-spectrum) !important;}.has-blush-light-purple-gradient-background{background: var(--wp--preset--gradient--blush-light-purple) !important;}.has-blush-bordeaux-gradient-background{background: var(--wp--preset--gradient--blush-bordeaux) !important;}.has-luminous-dusk-gradient-background{background: var(--wp--preset--gradient--luminous-dusk) !important;}.has-pale-ocean-gradient-background{background: var(--wp--preset--gradient--pale-ocean) !important;}.has-electric-grass-gradient-background{background: var(--wp--preset--gradient--electric-grass) !important;}.has-midnight-gradient-background{background: var(--wp--preset--gradient--midnight) !important;}.has-small-font-size{font-size: var(--wp--preset--font-size--small) !important;}.has-medium-font-size{font-size: var(--wp--preset--font-size--medium) !important;}.has-large-font-size{font-size: var(--wp--preset--font-size--large) !important;}.has-x-large-font-size{font-size: var(--wp--preset--font-size--x-large) !important;}
+:where(.wp-block-columns.is-layout-flex){gap: 2em;}
+.wp-block-pullquote{font-size: 1.5em;line-height: 1.6;}
+.wp-block-navigation a:where(:not(.wp-element-button)){color: inherit;}
+</style>
+<link crossorigin='anonymous' rel='stylesheet' id='all-css-2-1' href='https://s0.wp.com/wp-content/mu-plugins/jetpack-plugin/sun/_inc/genericons/genericons/genericons.css?m=1685112397h&cssminify=yes' type='text/css' media='all' />
+<link rel='stylesheet' id='colinear-open-sans-lora-css' href='https://fonts-api.wp.com/css?family=Open+Sans%3A400%2C700%2C400italic%2C700italic%7CLora%3A400%2C700%2C400italic%2C700italic&#038;subset=latin%2Clatin-ext&#038;ver=6.2.1-RC1-55769' media='all' />
+<link rel='stylesheet' id='colinear-inconsolata-css' href='https://fonts-api.wp.com/css?family=Inconsolata%3A400%2C+700&#038;subset=latin%2Clatin-ext&#038;ver=6.2.1-RC1-55769' media='all' />
+<link crossorigin='anonymous' rel='stylesheet' id='all-css-6-1' href='https://s0.wp.com/_static/??-eJyFi8sKAjEMAH/IGopY8CB+SzfEbiRNSh8s/v2u7EUR9DYDM7AUh6adtEOfKVODMiZAE1aKFVp/Ch2xtQP8KVlxr91S0PLXk4crMhJrg0TmxDB2Nv0Qd5fI9ddaaRJLGybYqjd9Tbd89Wd/Cj6Ei3+skmlRLg==&cssminify=yes' type='text/css' media='all' />
+<link crossorigin='anonymous' rel='stylesheet' id='print-css-7-1' href='https://s0.wp.com/wp-content/mu-plugins/global-print/global-print.css?m=1465851035h&cssminify=yes' type='text/css' media='print' />
+<style id='jetpack-global-styles-frontend-style-inline-css'>
+:root { --font-headings: unset; --font-base: unset; --font-headings-default: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif; --font-base-default: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;}
+</style>
+<link crossorigin='anonymous' rel='stylesheet' id='all-css-10-1' href='https://s0.wp.com/wp-content/themes/h4/global.css?m=1420737423h&cssminify=yes' type='text/css' media='all' />
+<script id='wpcom-actionbar-placeholder-js-extra'>
+var actionbardata = {"siteID":"93232423","siteURL":"https:\/\/simon-martin.net","xhrURL":"https:\/\/simon-martin.net\/wp-admin\/admin-ajax.php","nonce":"8abfb024ef","isLoggedIn":"","statusMessage":"","subsEmailDefault":"instantly","proxyScriptUrl":"https:\/\/s0.wp.com\/wp-content\/js\/wpcom-proxy-request.js?ver=20211021","i18n":{"followedText":"New posts from this site will now appear in your <a href=\"https:\/\/wordpress.com\/read\">Reader<\/a>","foldBar":"Collapse this bar","unfoldBar":"Expand this bar"}};
+</script>
+<script crossorigin='anonymous' type='text/javascript' src='https://s0.wp.com/_static/??-eJzTLy/QTc7PK0nNK9HPKtbPzU/KzEnVLS1OLUpMB4rpZual5etlFevoo6oryinRLSjKr6iEyWXmJeeUpqQWgySzCktTiyqhlF5uZh5BRbq5melFiSWpUMX2ubaGZuYWlhYGlhaGWQCPrjue'></script>
+<script type='text/javascript'>
+	window.addEventListener( 'DOMContentLoaded', function() {
+		rltInitialize( {"token":null,"iframeOrigins":["https:\/\/widgets.wp.com"]} );
+	} );
+</script>
+<link rel="EditURI" type="application/rsd+xml" title="RSD" href="https://simonmartinblog.wordpress.com/xmlrpc.php?rsd" />
+<link rel="wlwmanifest" type="application/wlwmanifest+xml" href="https://s0.wp.com/wp-includes/wlwmanifest.xml" />
+<meta name="generator" content="WordPress.com" />
+<link rel='shortlink' href='https://wp.me/6jc0L' />
+
+<!-- Jetpack Open Graph Tags -->
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Martin Simon&#039;s research blog" />
+<meta property="og:url" content="https://simon-martin.net/" />
+<meta property="og:site_name" content="Martin Simon&#039;s research blog" />
+<meta property="og:image" content="https://s0.wp.com/i/blank.jpg" />
+<meta property="og:image:alt" content="" />
+<meta property="og:locale" content="en_US" />
+
+<!-- End Jetpack Open Graph Tags -->
+<link rel="shortcut icon" type="image/x-icon" href="https://s0.wp.com/i/favicon.ico" sizes="16x16 24x24 32x32 48x48" />
+<link rel="icon" type="image/x-icon" href="https://s0.wp.com/i/favicon.ico" sizes="16x16 24x24 32x32 48x48" />
+<link rel="apple-touch-icon" href="https://s0.wp.com/i/webclip.png" />
+<link rel='openid.server' href='https://simon-martin.net/?openidserver=1' />
+<link rel='openid.delegate' href='https://simon-martin.net/' />
+<link rel="search" type="application/opensearchdescription+xml" href="https://simon-martin.net/osd.xml" title="Martin Simon&#039;s research blog" />
+<link rel="search" type="application/opensearchdescription+xml" href="https://s1.wp.com/opensearch.xml" title="WordPress.com" />
+		<style type="text/css">
+			.recentcomments a {
+				display: inline !important;
+				padding: 0 !important;
+				margin: 0 !important;
+			}
+
+			table.recentcommentsavatartop img.avatar, table.recentcommentsavatarend img.avatar {
+				border: 0px;
+				margin: 0;
+			}
+
+			table.recentcommentsavatartop a, table.recentcommentsavatarend a {
+				border: 0px !important;
+				background-color: transparent !important;
+			}
+
+			td.recentcommentsavatarend, td.recentcommentsavatartop {
+				padding: 0px 0px 1px 0px;
+				margin: 0px;
+			}
+
+			td.recentcommentstextend {
+				border: none !important;
+				padding: 0px 0px 2px 10px;
+			}
+
+			.rtl td.recentcommentstextend {
+				padding: 0px 10px 2px 0px;
+			}
+
+			td.recentcommentstexttop {
+				border: none;
+				padding: 0px 0px 0px 10px;
+			}
+
+			.rtl td.recentcommentstexttop {
+				padding: 0px 10px 0px 0px;
+			}
+		</style>
+		<meta name="application-name" content="Martin Simon&#039;s research blog" /><meta name="msapplication-window" content="width=device-width;height=device-height" /><meta name="msapplication-task" content="name=Subscribe;action-uri=https://simon-martin.net/feed/;icon-uri=https://s0.wp.com/i/favicon.ico" /><meta name="msapplication-task" content="name=Sign up for a free blog;action-uri=http://wordpress.com/signup/;icon-uri=https://s0.wp.com/i/favicon.ico" /><meta name="msapplication-task" content="name=WordPress.com Support;action-uri=http://support.wordpress.com/;icon-uri=https://s0.wp.com/i/favicon.ico" /><meta name="msapplication-task" content="name=WordPress.com Forums;action-uri=http://forums.wordpress.com/;icon-uri=https://s0.wp.com/i/favicon.ico" /><!-- Your Google Analytics Plugin is missing the tracking ID -->
+</head>
+
+<body class="home blog customizer-styles-applied has-menu highlander-enabled highlander-light">
+<div id="page" class="hfeed site">
+	<a class="skip-link screen-reader-text" href="#content">Skip to content</a>
+
+	<header id="masthead" class="site-header" role="banner">
+		<div class="site-branding">
+			<a href="https://simon-martin.net/" class="site-logo-link" rel="home" itemprop="url"></a>
+								<h1 class="site-title"><a href="https://simon-martin.net/" rel="home">Martin Simon&#039;s research blog</a></h1>
+						</div><!-- .site-branding -->
+
+				<nav id="site-navigation" class="main-navigation" role="navigation">
+			<button class="menu-toggle" aria-controls="primary-menu" aria-expanded="false"><span class="screen-reader-text">Primary Menu</span></button>
+			<div class="menu-menu-container"><ul id="primary-menu" class="menu"><li id="menu-item-99" class="menu-item menu-item-type-custom menu-item-object-custom menu-item-99"><a href="https://simonmartinblog.wordpress.com">Home</a></li>
+<li id="menu-item-100" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-home menu-item-100"><a href="https://simon-martin.net/research/">Research</a></li>
+<li id="menu-item-101" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-101"><a href="https://simon-martin.net/teaching/">Teaching</a></li>
+<li id="menu-item-102" class="menu-item menu-item-type-post_type menu-item-object-page menu-item-102"><a href="https://simon-martin.net/contact/">About</a></li>
+</ul></div>		</nav><!-- #site-navigation -->
+		
+				<div class="header-image">
+			<a href="https://simon-martin.net/" rel="home">
+				<img src="https://simonmartinblog.files.wordpress.com/2019/08/cropped-logo-1.png" width="1188" height="240" alt="">
+			</a>
+		</div><!-- .header-image -->
+			</header><!-- #masthead -->
+
+	<div id="content" class="site-content">
+	<div id="primary" class="content-area">
+		<main id="main" class="site-main" role="main">
+
+		
+						
+				
+<article id="post-331" class="post-331 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2020/03/01/boosting-intel-mkl-on-amd-ryzen-processors/" rel="bookmark">Boosting Intel MKL on AMD Ryzen&nbsp;processors</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>Over the weekend I had the time to test a workaround which caught quite a bit of attention when it was first published in November 2019 on Reddit under the title &#8220;<em><a class="external-link" href="https://www.reddit.com/r/matlab/comments/dxn38s/howto_force_matlab_to_use_a_fast_codepath_on_amd/" target="_blank" rel="noopener">How to force Matlab to use a fast codepath on AMD Ryzen/TR CPUs</a>&#8220;</em>. Among MATLAB users it was known for a long time that the underlying Intel <a class="has-tooltip js-tooltip" href="https://de.wikipedia.org/wiki/Math_Kernel_Library" target="_blank" rel="noopener">Math Kernel Library</a> was optimized <span style="color:var(--color-text);">for Intel processors and notoriously slow on AMD processors, no matter whether the CPU supports efficient SIMD extensions or not. For example the linear algebra libraries BLAS and LAPACK are included in the MKL. This drawback also known as the &#8220;cripple AMD&#8221; routine exists for more than 10 years and does also affect NumPy as you can see from the </span><a class="external-link" href="https://en.wikipedia.org/wiki/Math_Kernel_Library" target="_blank" rel="noopener">Wikipedia Article for the Math Kernel Library</a><span style="color:var(--color-text);">: &#8220;However, as long as the master function detects a non-Intel CPU, it almost always chooses the most basic (and slowest) function to use, regardless of what instruction sets the CPU claims to support. This has netted the system a nickname of &#8220;cripple AMD&#8221; routine since 2009. As of 2019, MKL, which remains the </span><span style="color:var(--color-text);">choice of many pre-compiled Mathematical applications on Windows (such as NumPy, SymPy, and MATLAB), still significantly underperforms on AMD CPUs with equivalent instruction sets.&#8221; </span><em style="color:var(--color-text);">Source: Wikipedia</em></p>
+<p><img loading="lazy" data-attachment-id="353" data-permalink="https://simon-martin.net/2020/03/01/boosting-intel-mkl-on-amd-ryzen-processors/ryzen/" data-orig-file="https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png" data-orig-size="518,521" data-comments-opened="1" data-image-meta="{&quot;aperture&quot;:&quot;0&quot;,&quot;credit&quot;:&quot;&quot;,&quot;camera&quot;:&quot;&quot;,&quot;caption&quot;:&quot;&quot;,&quot;created_timestamp&quot;:&quot;0&quot;,&quot;copyright&quot;:&quot;&quot;,&quot;focal_length&quot;:&quot;0&quot;,&quot;iso&quot;:&quot;0&quot;,&quot;shutter_speed&quot;:&quot;0&quot;,&quot;title&quot;:&quot;&quot;,&quot;orientation&quot;:&quot;0&quot;}" data-image-title="Ryzen" data-image-description="" data-image-caption="" data-medium-file="https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=298" data-large-file="https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=518" class="  wp-image-353 alignleft" src="https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=327&#038;h=329" alt="Ryzen" width="327" height="329" srcset="https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=327&amp;h=329 327w, https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=150&amp;h=150 150w, https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png?w=298&amp;h=300 298w, https://simonmartinblog.files.wordpress.com/2020/03/ryzen.png 518w" sizes="(max-width: 327px) 100vw, 327px" /></p>
+<p>In other words, while AMD CPUs come with full SSE4, AVX and AVX2 support, software vendors are not obliged to state whether their software that claims to support AVX, AVX2, SSE, or any other SIMD features executes solely on supported Intel CPUs. In the case of the MKL, the library checks the vendor-ID of the CPU and if this does read &#8220;AuthenticAMD&#8221; rather than &#8220;GenuineIntel&#8221;, it switches to a standard SSE fallback mode, ignoring the CPUs real capabilities. The workaround consists of merely 4 lines of code in a batch file and it enforces the usage of AVX2 by MKL in MATLAB, no matter what vendor-ID is found. In my tests on a AMD Ryzen 7 3700X CPU I found<span style="color:var(--color-text);"> an overall performance improvement with significantly large gains in individual tests, e.g., &gt;200% for the double precision Cholesky factorization routine. I think this is fantastic news for MATLAB and NumPy users as without the &#8220;cripple AMD&#8221; routine AMDs Ryzen and Threadripper CPUs offer a very attractive price performance ratio.  </span></p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2020/03/01/boosting-intel-mkl-on-amd-ryzen-processors/" rel="bookmark"><time class="entry-date published" datetime="2020-03-01T16:22:35+01:00">March 1, 2020</time><time class="updated" datetime="2020-03-07T14:24:53+01:00">March 7, 2020</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2020/03/01/boosting-intel-mkl-on-amd-ryzen-processors/#comments">4 Comments</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-275" class="post-275 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2019/08/14/visiting-lectureship-at-goethe-university/" rel="bookmark">Visiting Lectureship at Goethe-University</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>In the winter semester 2019/2020 I will be a visiting lecturer in Prof. Bastian von Harrach‘s group at the Institute of Mathematics at the Goethe-University in Frankfurt am Main teaching a seminar on &#8220;Numerics for Implied Volatility Surface Construction&#8221;. To find more information about the seminar please visit the seminar’s website <a href="http://www.uni-frankfurt.de/82290595/ContentPage_82290595" target="_blank" rel="noopener">here</a> or have a look at the <a title="Announcement" href="https://simonmartinblog.files.wordpress.com/2019/08/announcement.pdf" target="_blank" rel="noopener">announcement</a> (both in German).</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2019/08/14/visiting-lectureship-at-goethe-university/" rel="bookmark"><time class="entry-date published" datetime="2019-08-14T20:51:23+02:00">August 14, 2019</time><time class="updated" datetime="2019-09-29T17:54:10+02:00">September 29, 2019</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2019/08/14/visiting-lectureship-at-goethe-university/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-262" class="post-262 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2019/04/14/mathfinance-conference-2019-recap/" rel="bookmark">MathFinance Conference 2019&nbsp;Recap</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>Over the weekend, I had time to reflect on how delightful this year&#8217;s <a href="https://www.mathfinance.com/events/mathfinance-conference/" target="_blank" rel="noopener">MathFinance Conference</a> in Frankfurt had been. While I felt that all talks of the conference were very interesting these are my personal highlights:</p>
+<div>
+<p>The conference started on Monday with an insightful talk by Thorsten Schmidt (University Freiburg) presenting new perspectives for understanding the concept of statistical arbitrage. Then followed a peek into the world of crypto currencies and crypto markets featuring 4 speakers from the Humboldt-University in Berlin including Wolfgang Härdle whose talk was particularly instructive for me, as I had not heard about the <a href="http://thecrix.de" target="_blank" rel="noopener">CRIX index (developed by Härdle and Trimborn)</a> before. I particularly liked the fact that all the datasets presented in the talk can be accessed online so that the listeners could start playing around with the data right away. I learned from both, this session and playing around with the data that cryptos classify as a new asset class in the sense that its distribution features strongly differ from those of the more traditional asset classes. However, as was pointed out in the afternoon panel discussion, there is no intrinsic value in, e.g., Bitcoin and I would like to add here that from my perspective it’s intrinsic value is in fact negative due to it’s <a href="https://www.bloomberg.com/news/articles/2018-10-29/bitcoin-could-theoretically-put-paris-climate-goals-out-of-reach" target="_blank" rel="noopener">disastrous carbon footprint</a> (the creation of new bitcoins requires immense computational effort and therefore enormous amounts of energy). So, while the blockchain technology is most probably here to stay, whether Bitcoin will become mainstream remains to be seen. I enjoyed the talk by Daniel Oeltz (Rivacon) on PAILAB which stands for Python Artificial Intelligence Laboratory &#8211; an open source pythonic workbench &#8211; and will be released by the end of April. Looking forward to it. I also gave my talk on <a href="https://simonmartinblog.wordpress.com/2018/06/28/asset-price-bubbles-an-option-based-indicator/">our option-based indicator for stock price bubbles</a> on Monday afternoon and particularly enjoyed the questions by the participants which made for a lively and intriguing discussion. The talks on Tuesday morning had a focus on modeling and numerics and I very much enjoyed Adil Regha<span style="color:var(--color-neutral-600);">ï</span>’s (Natixis) talk on SLV which was in some sense the continuation of his great talk from last year’s conference. Antoine Jacquier’s (Imperial College London) talk on VIX options in rough volatility models was my personal highlight of the conference because afterwards I was convinced that at some point in the very near future the industry will adopt these models which are currently mainly subject of academic research. I will take this as an occasion to start studying the literature on rough volatility. In the afternoon session Ingo Mainert (Allianz Global Investors) gave a thought-provoking keynote speech on &#8220;Current Challenges and Developments of the Investment Industry&#8221;. Moreover, Uwe Wystup (MathFinance) provided an information-packed talk on FX option greeks and the conference was completed by Rolf Poulsen&#8217;s (University of Copenhagen) highly enjoyable talk entitled &#8220;The Fed Isn’t Federal &#8211; And Other Odd Things in Finance&#8221;.</p>
+<div>I would like to say a huge thank you to the whole MathFinance team, particularly the Wystup family, Ansua, Uwe, Bristi and Rittik, for organizing this amazing conference full of thought-provoking talks and wonderful people at the forefront of quantitative finance. I am already looking forward to the 20th edition in 2020.</div>
+</div>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2019/04/14/mathfinance-conference-2019-recap/" rel="bookmark"><time class="entry-date published" datetime="2019-04-14T21:53:58+02:00">April 14, 2019</time><time class="updated" datetime="2019-04-14T22:01:35+02:00">April 14, 2019</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2019/04/14/mathfinance-conference-2019-recap/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-257" class="post-257 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2019/03/24/sdes-in-finance-workshop-at-lut/" rel="bookmark">SDEs in Finance Workshop at&nbsp;LUT</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>As I returned from the <a href="https://www.lut.fi/web/en/stochastic-differential-equations-with-applications-in-finance" target="_blank" rel="noopener noreferrer">Workshop on SDEs with Applications in Finance</a> at <a href="https://www.lut.fi/web/en/" target="_blank" rel="noopener noreferrer">Lappeenranta University of Technology</a>, on my flight back to Frankfurt, I reflected on how enjoyable this workshop had been.</p>
+<p>Among the many interesting talks (in fact I felt that all of them were very interesting), there were two which were so close to my field of interest that I will definitely have to catch up by reading the corresponding papers very carefully. Eero Immonen gave a great presentation on dynamical modeling of efficient financial markets based on a paper published in <a href="https://www.sciencedirect.com/science/article/pii/S0378437115002940" target="_blank" rel="noopener noreferrer">Physica A</a> and another one published in the <a href="https://www.sciencedirect.com/science/article/abs/pii/S0304406816303068" target="_blank" rel="noopener noreferrer">Journal of Mathematical Economics</a>. Sebastian Springer gave a very interesting talk on correlation-integral likelihood for SDEs based on <a href="https://www.springerprofessional.de/correlation-integral-likelihood-for-stochastic-differential-equa/16542792" target="_blank" rel="noopener noreferrer">joint work with Heikki Haario, Janne Hakkarainen and Ramona Maraia</a>. On a personal note, I am greatly honored I was allowed to provide my practitioner&#8217;s perspective on our recent work on <a href="https://arxiv.org/abs/1805.07403" target="_blank" rel="noopener noreferrer">data-driven indicators for stock price bubbles</a> (which is joint work with Lassi Roininen, Petteri Piiroinen and Tobias Schoden) in a keynote talk which was also the very first talk in a brand new <a href="https://www.lut.fi/web/en/school-of-engineering-science/research/research-groups/inverse-problems/seminar" target="_blank" rel="noopener noreferrer">seminar series on Mathematical Sciences at Lappeenranta University of Technology</a>. In the second keynote talk Petteri Piiroinen gave a great presentation on the theoretical aspects of our work ranging from strict local martingales and geometry in the SABR plane to connections to Feynman path integrals.</p>
+<p>Many thanks to both the local organizers and the participants of this workshop for providing such a friendly and stimulating atmosphere and for many interesting discussions and questions.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2019/03/24/sdes-in-finance-workshop-at-lut/" rel="bookmark"><time class="entry-date published" datetime="2019-03-24T19:06:30+01:00">March 24, 2019</time><time class="updated" datetime="2019-03-24T19:21:04+01:00">March 24, 2019</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2019/03/24/sdes-in-finance-workshop-at-lut/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-232" class="post-232 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2018/06/28/asset-price-bubbles-an-option-based-indicator/" rel="bookmark">Asset Price Bubbles: An Option-Based&nbsp;Indicator</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>Together with Petteri Piiroinen (University of Helsinki), Lassi Roininen (Univerity of Oulu) and my colleague Tobias Schoden at Deka Investment we have developed an option-based indicator for short-term asset price bubbles. One of the findings in the corresponding publication (which can be found <a href="https://arxiv.org/abs/1805.07403" target="_blank" rel="noopener">here</a>) is that in the sector of tech stocks short-term bubbles are quite common nowadays.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2018/06/28/asset-price-bubbles-an-option-based-indicator/" rel="bookmark"><time class="entry-date published" datetime="2018-06-28T21:04:43+02:00">June 28, 2018</time><time class="updated" datetime="2018-12-04T15:47:07+01:00">December 4, 2018</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2018/06/28/asset-price-bubbles-an-option-based-indicator/#comments">1 Comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-204" class="post-204 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2017/08/14/an-even-easier-introduction-to-cuda/" rel="bookmark">An even easier introduction to&nbsp;CUDA</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p><a href="https://devblogs.nvidia.com/parallelforall/even-easier-introduction-cuda/" target="_blank" rel="noopener">This blog post</a>, written by Mark Harris, Chief Technologist for GPU Computing Software at NVIDIA, gives a brief and very accessible introduction to the CUDA parallel computing platform. Mark also provides some exercises touching very recent developments such as the new Unified Memory capabilities that came with the Pascal generation of GPUs. A good read for programmers planning to start CUDA coding and a highly recommendable blog for those interested in GPGU computing.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2017/08/14/an-even-easier-introduction-to-cuda/" rel="bookmark"><time class="entry-date published updated" datetime="2017-08-14T20:33:23+02:00">August 14, 2017</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2017/08/14/an-even-easier-introduction-to-cuda/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-157" class="post-157 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2017/07/12/article-probabilistic-interpretation-of-the-calderon-problem-published/" rel="bookmark">Article Probabilistic interpretation of the Calderón problem&nbsp;published</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>Jointly with Petteri Piiroinen from University of Helsinki, we have continued our work on the probabilistic interpretation of the Calderón problem which was first posed by <a href="http://en.wikipedia.org/wiki/Alberto_Calder%C3%B3n">Alberto Calderón</a> in the nowadays <a href="http://www.scielo.br/scielo.php?script=sci_abstract&amp;pid=S0101-82052006000200002&amp;lng=en&amp;nrm=iso&amp;tlng=en">famous paper</a> that layed the foundations for the mathematical study of the inverse conductivity boundary value problem (the inverse problem for electrical impedance tomography). After deriving a probabilistic interpretation of the forward problem with applications for problems with random background conductivities in a previous work (namely our Annals of Applied Probability article <a href="https://www.google.de/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;ved=0ahUKEwic5NHZsITVAhUGaVAKHaE6BlwQFggmMAA&amp;url=https%3A%2F%2Fprojecteuclid.org%2Feuclid.aoap%2F1476884310&amp;usg=AFQjCNEBGyGUoqNTvbyAuUEn0GsBUWbn_w">From Feynman–Kac formulae to numerical &#8230;</a>), we have now tackled the inverse problem finding several interesting new formulations of the problem which might add to our understanding of the Calderón problem which is (in its most general form) still unsolved. <a href="http://aimsciences.org/journals/displayArticlesnew.jsp?paperID=14055">Here</a> is the link to our paper which was published in <a href="https://www.google.de/url?sa=t&amp;rct=j&amp;q=&amp;esrc=s&amp;source=web&amp;cd=1&amp;ved=0ahUKEwjiw-KRsITVAhVIaVAKHXENC9oQFggsMAA&amp;url=https%3A%2F%2Faimsciences.org%2Fjournals%2Fhome.jsp%3FjournalID%3D11&amp;usg=AFQjCNGVNRC31rmZfF5RNrAxfBwdSlKvYw">Inverse Problems and Imaging &#8211; AIMS.</a></p>
+<p>&nbsp;</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2017/07/12/article-probabilistic-interpretation-of-the-calderon-problem-published/" rel="bookmark"><time class="entry-date published" datetime="2017-07-12T20:31:52+02:00">July 12, 2017</time><time class="updated" datetime="2017-07-12T21:08:35+02:00">July 12, 2017</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2017/07/12/article-probabilistic-interpretation-of-the-calderon-problem-published/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-124" class="post-124 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2016/07/15/hpc-to-your-dektop-turbo-boosting-matlab-via-the-techila-distributed-computing-solution-in-the-google-cloud/" rel="bookmark">HPC to your Dektop – Turbo Boosting MATLAB via the Techila Distributed Computing Solution in the Google&nbsp;Cloud</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>“3 day MATLAB computation done in 4 minutes with a cost of $10” is the message of a recent tweet by the Tampere based Finnish Techila Technologies Ltd folks which first got me interested in their distributed computing solution. The Techila system is a distributed computing middleware and management solution for computing servers, clusters and cloud services. I am mostly interested in the latter variant, more precisely, I decided to have a closer look at Techila in combination with MATLAB on the Google cloud platform which provides a full pay-as-you-go cloud solution together with Google’s state-of-the-art monitoring, logging and diagnostics tools. Sounds exciting? In my eyes it is even more appealing with regard to the fact that Google is offering Google cloud platform education grants which give students free credits and the ability to learn on the platform during their University courses thus having the potential to bring on-demand supercomputing to every student’s desk.  Over the weekend, I have tested this framework by studying a commonly used benchmark problem from mathematical finance, namely pricing and sensitivity calculation of a swaption portfolio within a LIBOR market model using Monte Carlo simulation. For students with no or restricted access to the local super computer it is no exaggeration to say that Techila might provide the biggest bang for the buck.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2016/07/15/hpc-to-your-dektop-turbo-boosting-matlab-via-the-techila-distributed-computing-solution-in-the-google-cloud/" rel="bookmark"><time class="entry-date published" datetime="2016-07-15T20:41:51+02:00">July 15, 2016</time><time class="updated" datetime="2017-07-12T21:09:57+02:00">July 12, 2017</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2016/07/15/hpc-to-your-dektop-turbo-boosting-matlab-via-the-techila-distributed-computing-solution-in-the-google-cloud/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-75" class="post-75 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2016/01/11/new-article-published/" rel="bookmark">Reflecting Random walk on spheres article&nbsp;published</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p>Together with my colleague Professor Sylvain Maire from Université du  Toulon, France, we have developed some extensions of the well-known r<em>andom walk on spheres estimator </em>to simulate reflecting and partially reflecting diffusion processes. In our recent article which has been published in the <a href="http://www.sciencedirect.com/science/article/pii/S0021999115006671" target="_blank">Journal of Computational Physics</a> we adapt these techniques to the forward problem of electrical impedance tomography.</p>
+<p>Here comes the abstract: In this work, we develop a probabilistic estimator for the voltage-to-current map arising in electrical impedance tomography. This novel so-called <em>partially reflecting random walk on spheres estimator</em> enables Monte Carlo methods to compute the voltage-to-current map in an embarrassingly parallel manner, which is an important issue with regard to the corresponding inverse problem. Our method uses the well-known random walk on spheres algorithm inside subdomains where the diffusion coefficient is constant and employs replacement techniques motivated by finite difference discretization to deal with both mixed boundary conditions and interface transmission conditions. We analyze the global bias and the variance of the new estimator both theoretically and experimentally. Subsequently, the variance of the new estimator is considerably reduced via a novel control variate conditional sampling technique which yields a highly efficient hybrid forward solver coupling probabilistic and deterministic algorithms.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2016/01/11/new-article-published/" rel="bookmark"><time class="entry-date published" datetime="2016-01-11T19:52:10+01:00">January 11, 2016</time><time class="updated" datetime="2016-04-03T10:14:43+02:00">April 3, 2016</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2016/01/11/new-article-published/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+				
+<article id="post-2" class="post-2 post type-post status-publish format-standard hentry category-uncategorized">
+	<header class="entry-header">
+		<h1 class="entry-title"><a href="https://simon-martin.net/2015/10/05/2/" rel="bookmark">Monograph published</a></h1>
+			</header><!-- .entry-header -->
+
+	<div class="entry-content">
+		<p><a href="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png"><img loading="lazy" data-attachment-id="8" data-permalink="https://simon-martin.net/2015/10/05/2/attachment/9783658109929/" data-orig-file="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png" data-orig-size="827,1173" data-comments-opened="1" data-image-meta="{&quot;aperture&quot;:&quot;0&quot;,&quot;credit&quot;:&quot;&quot;,&quot;camera&quot;:&quot;&quot;,&quot;caption&quot;:&quot;&quot;,&quot;created_timestamp&quot;:&quot;0&quot;,&quot;copyright&quot;:&quot;&quot;,&quot;focal_length&quot;:&quot;0&quot;,&quot;iso&quot;:&quot;0&quot;,&quot;shutter_speed&quot;:&quot;0&quot;,&quot;title&quot;:&quot;&quot;,&quot;orientation&quot;:&quot;0&quot;}" data-image-title="Monograph cover" data-image-description="" data-image-caption="" data-medium-file="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=212" data-large-file="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=722" class="alignnone size-medium wp-image-8" src="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=212&#038;h=300" alt="Monograph cover" width="212" height="300" srcset="https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=212&amp;h=300 212w, https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=424&amp;h=600 424w, https://simonmartinblog.files.wordpress.com/2015/06/9783658109929.png?w=106&amp;h=150 106w" sizes="(max-width: 212px) 100vw, 212px" /></a></p>
+<p>My monograph <a href="http://www.springer.com/de/book/9783658109929" target="_blank"><em>Anomaly Detection in Random Heterogeneous Media: Feynman-Kac Formulae, Stochastic Homogenization and Statistical Inversion</em> with a foreword by Lassi Päivärinta</a> has now been published (Springer -Verlag, 164 pages). The monograph is concerned with the analysis and numerical solution of a stochastic inverse anomaly detection problem in electrical impedance tomography (EIT). More precisely, we study the problem of detecting a parameterized anomaly in an isotropic, stationary and ergodic conductivity random field whose realizations are rapidly oscillating. For this purpose, we derive Feynman-Kac formulae to rigorously justify stochastic homogenization in the case of the underlying stochastic boundary value problem. We combine techniques from the theory of partial differential equations and functional analysis with probabilistic ideas, paving the way to new mathematical theorems which may be fruitfully used in the treatment of the problem at hand. Moreover, we propose an efficient numerical method in the framework of Bayesian inversion for the practical solution of the stochastic inverse anomaly detection problem.</p>
+			</div><!-- .entry-content -->
+
+	<footer class="entry-footer">
+		<span class="date-author"><span class="posted-on">Posted on <a href="https://simon-martin.net/2015/10/05/2/" rel="bookmark"><time class="entry-date published" datetime="2015-10-05T20:11:06+02:00">October 5, 2015</time><time class="updated" datetime="2016-01-11T19:54:38+01:00">January 11, 2016</time></a></span><span class="byline"> by <span class="author vcard"><a class="url fn n" href="https://simon-martin.net/author/marsimonwp/">marsimonwp</a></span></span></span><span class="comments-link"><a href="https://simon-martin.net/2015/10/05/2/#respond">Leave a comment</a></span>	</footer><!-- .entry-footer -->
+</article><!-- #post-## -->
+
+			
+			
+		
+		</main><!-- #main -->
+	</div><!-- #primary -->
+
+
+<div id="secondary" class="widget-area" role="complementary">
+
+	
+	
+	
+		<div class="right-sidebar">
+		<aside id="twitter_timeline-2" class="widget widget_twitter_timeline"><h2 class="widget-title">Follow me on Twitter</h2><a class="twitter-timeline" data-height="800" data-theme="light" data-border-color="#e8e8e8" data-lang="EN" data-partner="jetpack" href="https://twitter.com/simon_research" href="https://twitter.com/simon_research">My Tweets</a></aside>	</div><!-- .right-sidebar -->
+	
+	
+</div><!-- #secondary -->
+	</div><!-- #content -->
+
+	
+	<footer id="colophon" class="site-footer" role="contentinfo">
+		<div class="site-info">
+			<a href="https://wordpress.com/?ref=footer_custom_com" rel="nofollow">Website Built with WordPress.com</a>.
+			
+					</div><!-- .site-info -->
+	</footer><!-- #colophon -->
+</div><!-- #page -->
+
+<!--  -->
+<script src='//0.gravatar.com/js/gprofiles.js?ver=2023217348cad7c56c8cda123c6ffcde4518c6c17c856dc25ccd8742cd93ebc136a2f4' id='grofiles-cards-js'></script>
+<script id='wpgroho-js-extra'>
+var WPGroHo = {"my_hash":""};
+</script>
+<script crossorigin='anonymous' type='text/javascript' src='https://s0.wp.com/wp-content/mu-plugins/gravatar-hovercards/wpgroho.js?m=1610363240h'></script>
+
+	<script>
+		// Initialize and attach hovercards to all gravatars
+		( function() {
+			function init() {
+				if ( typeof Gravatar === 'undefined' ) {
+					return;
+				}
+
+				if ( typeof Gravatar.init !== 'function' ) {
+					return;
+				}
+
+				Gravatar.profile_cb = function ( hash, id ) {
+					WPGroHo.syncProfileData( hash, id );
+				};
+
+				Gravatar.my_hash = WPGroHo.my_hash;
+				Gravatar.init( 'body', '#wp-admin-bar-my-account' );
+			}
+
+			if ( document.readyState !== 'loading' ) {
+				init();
+			} else {
+				document.addEventListener( 'DOMContentLoaded', init );
+			}
+		} )();
+	</script>
+
+		<div style="display:none">
+	</div>
+	<div id="actionbar" style="display: none;"
+			class="actnbr-pub-colinear actnbr-has-follow">
+		<ul>
+								<li class="actnbr-btn actnbr-hidden">
+								<a class="actnbr-action actnbr-actn-follow " href="">
+			<svg class="gridicon gridicons-reader-follow" height="24" width="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M23 16v2h-3v3h-2v-3h-3v-2h3v-3h2v3h3zM20 2v9h-4v3h-3v4H4c-1.1 0-2-.9-2-2V2h18zM8 13v-1H4v1h4zm3-3H4v1h7v-1zm0-2H4v1h7V8zm7-4H4v2h14V4z"/></g></svg><span>Follow</span>
+		</a>
+		<a class="actnbr-action actnbr-actn-following  no-display" href="">
+			<svg class="gridicon gridicons-reader-following" height="24" width="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M23 13.482L15.508 21 12 17.4l1.412-1.388 2.106 2.188 6.094-6.094L23 13.482zm-7.455 1.862L20 10.89V2H2v14c0 1.1.9 2 2 2h4.538l4.913-4.832 2.095 2.176zM8 13H4v-1h4v1zm3-2H4v-1h7v1zm0-2H4V8h7v1zm7-3H4V4h14v2z"/></g></svg><span>Following</span>
+		</a>
+							<div class="actnbr-popover tip tip-top-left actnbr-notice" id="follow-bubble">
+							<div class="tip-arrow"></div>
+							<div class="tip-inner actnbr-follow-bubble">
+															<ul>
+											<li class="actnbr-sitename">
+			<a href="https://simon-martin.net">
+				<img alt='' src='https://s0.wp.com/i/logo/wpcom-gray-white.png' class='avatar avatar-50' height='50' width='50' />				Martin Simon&#039;s research blog			</a>
+		</li>
+										<form method="post" action="https://subscribe.wordpress.com" accept-charset="utf-8" style="display: none;">
+																				<div>
+										<input type="email" name="email" placeholder="Enter your email address" class="actnbr-email-field" aria-label="Enter your email address" />
+										</div>
+										<input type="hidden" name="action" value="subscribe" />
+										<input type="hidden" name="blog_id" value="93232423" />
+										<input type="hidden" name="source" value="https://simon-martin.net/" />
+										<input type="hidden" name="sub-type" value="actionbar-follow" />
+										<input type="hidden" id="_wpnonce" name="_wpnonce" value="90661b2f43" />										<div class="actnbr-button-wrap">
+											<button type="submit" value="Sign me up">
+												Sign me up											</button>
+										</div>
+									</form>
+									<li class="actnbr-login-nudge">
+										<div>
+											Already have a WordPress.com account? <a href="https://wordpress.com/log-in?redirect_to=https%3A%2F%2Fr-login.wordpress.com%2Fremote-login.php%3Faction%3Dlink%26back%3Dhttps%253A%252F%252Fsimon-martin.net%252F2020%252F03%252F01%252Fboosting-intel-mkl-on-amd-ryzen-processors%252F">Log in now.</a>										</div>
+									</li>
+								</ul>
+															</div>
+						</div>
+					</li>
+							<li class="actnbr-ellipsis actnbr-hidden">
+				<svg class="gridicon gridicons-ellipsis" height="24" width="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M7 12c0 1.104-.896 2-2 2s-2-.896-2-2 .896-2 2-2 2 .896 2 2zm12-2c-1.104 0-2 .896-2 2s.896 2 2 2 2-.896 2-2-.896-2-2-2zm-7 0c-1.104 0-2 .896-2 2s.896 2 2 2 2-.896 2-2-.896-2-2-2z"/></g></svg>				<div class="actnbr-popover tip tip-top-left actnbr-more">
+					<div class="tip-arrow"></div>
+					<div class="tip-inner">
+						<ul>
+									<li class="actnbr-sitename">
+			<a href="https://simon-martin.net">
+				<img alt='' src='https://s0.wp.com/i/logo/wpcom-gray-white.png' class='avatar avatar-50' height='50' width='50' />				Martin Simon&#039;s research blog			</a>
+		</li>
+								<li class="actnbr-folded-customize">
+								<a href="https://simonmartinblog.wordpress.com/wp-admin/customize.php?url=https%3A%2F%2Fsimonmartinblog.wordpress.com%2F">
+									<svg class="gridicon gridicons-customize" height="20" width="20" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M2 6c0-1.505.78-3.08 2-4 0 .845.69 2 2 2 1.657 0 3 1.343 3 3 0 .386-.08.752-.212 1.09.74.594 1.476 1.19 2.19 1.81L8.9 11.98c-.62-.716-1.214-1.454-1.807-2.192C6.753 9.92 6.387 10 6 10c-2.21 0-4-1.79-4-4zm12.152 6.848l1.34-1.34c.607.304 1.283.492 2.008.492 2.485 0 4.5-2.015 4.5-4.5 0-.725-.188-1.4-.493-2.007L18 9l-2-2 3.507-3.507C18.9 3.188 18.225 3 17.5 3 15.015 3 13 5.015 13 7.5c0 .725.188 1.4.493 2.007L3 20l2 2 6.848-6.848c1.885 1.928 3.874 3.753 5.977 5.45l1.425 1.148 1.5-1.5-1.15-1.425c-1.695-2.103-3.52-4.092-5.448-5.977z"/></g></svg>									<span>Customize</span>
+								</a>
+							</li>
+																<li class="actnbr-folded-follow">
+												<a class="actnbr-action actnbr-actn-follow " href="">
+			<svg class="gridicon gridicons-reader-follow" height="24" width="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M23 16v2h-3v3h-2v-3h-3v-2h3v-3h2v3h3zM20 2v9h-4v3h-3v4H4c-1.1 0-2-.9-2-2V2h18zM8 13v-1H4v1h4zm3-3H4v1h7v-1zm0-2H4v1h7V8zm7-4H4v2h14V4z"/></g></svg><span>Follow</span>
+		</a>
+		<a class="actnbr-action actnbr-actn-following  no-display" href="">
+			<svg class="gridicon gridicons-reader-following" height="24" width="24" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><g><path d="M23 13.482L15.508 21 12 17.4l1.412-1.388 2.106 2.188 6.094-6.094L23 13.482zm-7.455 1.862L20 10.89V2H2v14c0 1.1.9 2 2 2h4.538l4.913-4.832 2.095 2.176zM8 13H4v-1h4v1zm3-2H4v-1h7v1zm0-2H4V8h7v1zm7-3H4V4h14v2z"/></g></svg><span>Following</span>
+		</a>
+										</li>
+																	<li class="actnbr-signup"><a href="https://wordpress.com/start/">Sign up</a></li>
+									<li class="actnbr-login"><a href="https://wordpress.com/log-in?redirect_to=https%3A%2F%2Fr-login.wordpress.com%2Fremote-login.php%3Faction%3Dlink%26back%3Dhttps%253A%252F%252Fsimon-martin.net%252F2020%252F03%252F01%252Fboosting-intel-mkl-on-amd-ryzen-processors%252F">Log in</a></li>
+																	<li class="flb-report">
+										<a href="http://en.wordpress.com/abuse/?report_url=https://simon-martin.net" target="_blank">
+											Report this content										</a>
+									</li>
+																	<li class="actnbr-reader">
+										<a href="https://wordpress.com/read/feeds/101460246">
+											View site in Reader										</a>
+									</li>
+																	<li class="actnbr-subs">
+										<a href="https://subscribe.wordpress.com/">Manage subscriptions</a>
+									</li>
+																		<li class="actnbr-fold"><a href="">Collapse this bar</a></li>
+															</ul>
+					</div>
+				</div>
+			</li>
+		</ul>
+	</div>
+	
+<script>
+window.addEventListener( "load", function( event ) {
+	var link = document.createElement( "link" );
+	link.href = "https://s0.wp.com/wp-content/mu-plugins/actionbar/actionbar.css?v=20210915";
+	link.type = "text/css";
+	link.rel = "stylesheet";
+	document.head.appendChild( link );
+
+	var script = document.createElement( "script" );
+	script.src = "https://s0.wp.com/wp-content/mu-plugins/actionbar/actionbar.js?v=20220329";
+	script.defer = true;
+	document.body.appendChild( script );
+} );
+</script>
+
+			<div id="jp-carousel-loading-overlay">
+			<div id="jp-carousel-loading-wrapper">
+				<span id="jp-carousel-library-loading">&nbsp;</span>
+			</div>
+		</div>
+		<div class="jp-carousel-overlay" style="display: none;">
+
+		<div class="jp-carousel-container">
+			<!-- The Carousel Swiper -->
+			<div
+				class="jp-carousel-wrap swiper-container jp-carousel-swiper-container jp-carousel-transitions"
+				itemscope
+				itemtype="https://schema.org/ImageGallery">
+				<div class="jp-carousel swiper-wrapper"></div>
+				<div class="jp-swiper-button-prev swiper-button-prev">
+					<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<mask id="maskPrev" mask-type="alpha" maskUnits="userSpaceOnUse" x="8" y="6" width="9" height="12">
+							<path d="M16.2072 16.59L11.6496 12L16.2072 7.41L14.8041 6L8.8335 12L14.8041 18L16.2072 16.59Z" fill="white"/>
+						</mask>
+						<g mask="url(#maskPrev)">
+							<rect x="0.579102" width="23.8823" height="24" fill="#FFFFFF"/>
+						</g>
+					</svg>
+				</div>
+				<div class="jp-swiper-button-next swiper-button-next">
+					<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+						<mask id="maskNext" mask-type="alpha" maskUnits="userSpaceOnUse" x="8" y="6" width="8" height="12">
+							<path d="M8.59814 16.59L13.1557 12L8.59814 7.41L10.0012 6L15.9718 12L10.0012 18L8.59814 16.59Z" fill="white"/>
+						</mask>
+						<g mask="url(#maskNext)">
+							<rect x="0.34375" width="23.8822" height="24" fill="#FFFFFF"/>
+						</g>
+					</svg>
+				</div>
+			</div>
+			<!-- The main close buton -->
+			<div class="jp-carousel-close-hint">
+				<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+					<mask id="maskClose" mask-type="alpha" maskUnits="userSpaceOnUse" x="5" y="5" width="15" height="14">
+						<path d="M19.3166 6.41L17.9135 5L12.3509 10.59L6.78834 5L5.38525 6.41L10.9478 12L5.38525 17.59L6.78834 19L12.3509 13.41L17.9135 19L19.3166 17.59L13.754 12L19.3166 6.41Z" fill="white"/>
+					</mask>
+					<g mask="url(#maskClose)">
+						<rect x="0.409668" width="23.8823" height="24" fill="#FFFFFF"/>
+					</g>
+				</svg>
+			</div>
+			<!-- Image info, comments and meta -->
+			<div class="jp-carousel-info">
+				<div class="jp-carousel-info-footer">
+					<div class="jp-carousel-pagination-container">
+						<div class="jp-swiper-pagination swiper-pagination"></div>
+						<div class="jp-carousel-pagination"></div>
+					</div>
+					<div class="jp-carousel-photo-title-container">
+						<h2 class="jp-carousel-photo-caption"></h2>
+					</div>
+					<div class="jp-carousel-photo-icons-container">
+						<a href="#" class="jp-carousel-icon-btn jp-carousel-icon-info" aria-label="Toggle photo metadata visibility">
+							<span class="jp-carousel-icon">
+								<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<mask id="maskInfo" mask-type="alpha" maskUnits="userSpaceOnUse" x="2" y="2" width="21" height="20">
+										<path fill-rule="evenodd" clip-rule="evenodd" d="M12.7537 2C7.26076 2 2.80273 6.48 2.80273 12C2.80273 17.52 7.26076 22 12.7537 22C18.2466 22 22.7046 17.52 22.7046 12C22.7046 6.48 18.2466 2 12.7537 2ZM11.7586 7V9H13.7488V7H11.7586ZM11.7586 11V17H13.7488V11H11.7586ZM4.79292 12C4.79292 16.41 8.36531 20 12.7537 20C17.142 20 20.7144 16.41 20.7144 12C20.7144 7.59 17.142 4 12.7537 4C8.36531 4 4.79292 7.59 4.79292 12Z" fill="white"/>
+									</mask>
+									<g mask="url(#maskInfo)">
+										<rect x="0.8125" width="23.8823" height="24" fill="#FFFFFF"/>
+									</g>
+								</svg>
+							</span>
+						</a>
+												<a href="#" class="jp-carousel-icon-btn jp-carousel-icon-comments" aria-label="Toggle photo comments visibility">
+							<span class="jp-carousel-icon">
+								<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<mask id="maskComments" mask-type="alpha" maskUnits="userSpaceOnUse" x="2" y="2" width="21" height="20">
+										<path fill-rule="evenodd" clip-rule="evenodd" d="M4.3271 2H20.2486C21.3432 2 22.2388 2.9 22.2388 4V16C22.2388 17.1 21.3432 18 20.2486 18H6.31729L2.33691 22V4C2.33691 2.9 3.2325 2 4.3271 2ZM6.31729 16H20.2486V4H4.3271V18L6.31729 16Z" fill="white"/>
+									</mask>
+									<g mask="url(#maskComments)">
+										<rect x="0.34668" width="23.8823" height="24" fill="#FFFFFF"/>
+									</g>
+								</svg>
+
+								<span class="jp-carousel-has-comments-indicator" aria-label="This image has comments."></span>
+							</span>
+						</a>
+											</div>
+				</div>
+				<div class="jp-carousel-info-extra">
+					<div class="jp-carousel-info-content-wrapper">
+						<div class="jp-carousel-photo-title-container">
+							<h2 class="jp-carousel-photo-title"></h2>
+						</div>
+						<div class="jp-carousel-comments-wrapper">
+															<div id="jp-carousel-comments-loading">
+									<span>Loading Comments...</span>
+								</div>
+								<div class="jp-carousel-comments"></div>
+								<div id="jp-carousel-comment-form-container">
+									<span id="jp-carousel-comment-form-spinner">&nbsp;</span>
+									<div id="jp-carousel-comment-post-results"></div>
+																														<form id="jp-carousel-comment-form">
+												<label for="jp-carousel-comment-form-comment-field" class="screen-reader-text">Write a Comment...</label>
+												<textarea
+													name="comment"
+													class="jp-carousel-comment-form-field jp-carousel-comment-form-textarea"
+													id="jp-carousel-comment-form-comment-field"
+													placeholder="Write a Comment..."
+												></textarea>
+												<div id="jp-carousel-comment-form-submit-and-info-wrapper">
+													<div id="jp-carousel-comment-form-commenting-as">
+																													<fieldset>
+																<label for="jp-carousel-comment-form-email-field">Email (Required)</label>
+																<input type="text" name="email" class="jp-carousel-comment-form-field jp-carousel-comment-form-text-field" id="jp-carousel-comment-form-email-field" />
+															</fieldset>
+															<fieldset>
+																<label for="jp-carousel-comment-form-author-field">Name (Required)</label>
+																<input type="text" name="author" class="jp-carousel-comment-form-field jp-carousel-comment-form-text-field" id="jp-carousel-comment-form-author-field" />
+															</fieldset>
+															<fieldset>
+																<label for="jp-carousel-comment-form-url-field">Website</label>
+																<input type="text" name="url" class="jp-carousel-comment-form-field jp-carousel-comment-form-text-field" id="jp-carousel-comment-form-url-field" />
+															</fieldset>
+																											</div>
+													<input
+														type="submit"
+														name="submit"
+														class="jp-carousel-comment-form-button"
+														id="jp-carousel-comment-form-button-submit"
+														value="Post Comment" />
+												</div>
+											</form>
+																											</div>
+													</div>
+						<div class="jp-carousel-image-meta">
+							<div class="jp-carousel-title-and-caption">
+								<div class="jp-carousel-photo-info">
+									<h3 class="jp-carousel-caption" itemprop="caption description"></h3>
+								</div>
+
+								<div class="jp-carousel-photo-description"></div>
+							</div>
+							<ul class="jp-carousel-image-exif" style="display: none;"></ul>
+							<a class="jp-carousel-image-download" target="_blank" style="display: none;">
+								<svg width="25" height="24" viewBox="0 0 25 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+									<mask id="mask0" mask-type="alpha" maskUnits="userSpaceOnUse" x="3" y="3" width="19" height="18">
+										<path fill-rule="evenodd" clip-rule="evenodd" d="M5.84615 5V19H19.7775V12H21.7677V19C21.7677 20.1 20.8721 21 19.7775 21H5.84615C4.74159 21 3.85596 20.1 3.85596 19V5C3.85596 3.9 4.74159 3 5.84615 3H12.8118V5H5.84615ZM14.802 5V3H21.7677V10H19.7775V6.41L9.99569 16.24L8.59261 14.83L18.3744 5H14.802Z" fill="white"/>
+									</mask>
+									<g mask="url(#mask0)">
+										<rect x="0.870605" width="23.8823" height="24" fill="#FFFFFF"/>
+									</g>
+								</svg>
+								<span class="jp-carousel-download-text"></span>
+							</a>
+							<div class="jp-carousel-image-map" style="display: none;"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		</div>
+		<link crossorigin='anonymous' rel='stylesheet' id='all-css-0-2' href='https://s0.wp.com/_static/??-eJydjEEKgCAQAD+UrR6KLtFbTJfQdJXWxe9HUB/oOMMw0KtyhRpSgyyqJjkCMURs1brzZWAhyMVLQgZnryKMCbiHipfahXzC0TEP8H/2NZ94fltezbxMxkx61vEGx+U/hQ==&cssminify=yes' type='text/css' media='all' />
+<script id='colinear-navigation-js-extra'>
+var screenReaderText = {"expand":"<span class=\"screen-reader-text\">expand child menu<\/span>","collapse":"<span class=\"screen-reader-text\">collapse child menu<\/span>"};
+</script>
+<script id='jetpack-carousel-js-extra'>
+var jetpackSwiperLibraryPath = {"url":"https:\/\/s0.wp.com\/wp-content\/mu-plugins\/jetpack-plugin\/sun\/_inc\/build\/carousel\/swiper-bundle.min.js"};
+var jetpackCarouselStrings = {"widths":[370,700,1000,1200,1400,2000],"is_logged_in":"","lang":"en","ajaxurl":"https:\/\/simon-martin.net\/wp-admin\/admin-ajax.php","nonce":"8f3d77c8e9","display_exif":"1","display_comments":"1","single_image_gallery":"1","single_image_gallery_media_file":"","background_color":"black","comment":"Comment","post_comment":"Post Comment","write_comment":"Write a Comment...","loading_comments":"Loading Comments...","download_original":"View full size <span class=\"photo-size\">{0}<span class=\"photo-size-times\">\u00d7<\/span>{1}<\/span>","no_comment_text":"Please be sure to submit some text with your comment.","no_comment_email":"Please provide an email address to comment.","no_comment_author":"Please provide your name to comment.","comment_post_error":"Sorry, but there was an error posting your comment. Please try again later.","comment_approved":"Your comment was approved.","comment_unapproved":"Your comment is in moderation.","camera":"Camera","aperture":"Aperture","shutter_speed":"Shutter Speed","focal_length":"Focal Length","copyright":"Copyright","comment_registration":"0","require_name_email":"1","login_url":"https:\/\/simonmartinblog.wordpress.com\/wp-login.php?redirect_to=https%3A%2F%2Fsimon-martin.net%2F2020%2F03%2F01%2Fboosting-intel-mkl-on-amd-ryzen-processors%2F","blog_id":"93232423","meta_data":["camera","aperture","shutter_speed","focal_length","copyright"],"stats_query_args":"blog=93232423&v=wpcom&tz=2&user_id=0&subd=simonmartinblog","is_public":"1"};
+</script>
+<script crossorigin='anonymous' type='text/javascript' src='https://s0.wp.com/_static/??-eJydkM0OgkAMhF/IpUHj38H4KGatRQtsd0O74uMriRqCF+Jx2m9mkoE+OYxiJAa1woXujJQeRa0LGL3sRoEUUj4DxpaFfDfg4u989cZRZhq04eResnFVxKyu4rlVVRYcinTKh+xSm68sCjVZ8ti8NWgWOLEgWM9m1DnjQEPiHxHnzO0F0HcxK7Vf7HMoAv9MMEr9YK5PGMNEvnzHcCg3u3VZLlf7bf0EnyeXTw=='></script>
+<script type="text/javascript">
+// <![CDATA[
+(function() {
+try{
+  if ( window.external &&'msIsSiteMode' in window.external) {
+    if (window.external.msIsSiteMode()) {
+      var jl = document.createElement('script');
+      jl.type='text/javascript';
+      jl.async=true;
+      jl.src='/wp-content/plugins/ie-sitemode/custom-jumplist.php';
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(jl, s);
+    }
+  }
+}catch(e){}
+})();
+// ]]>
+</script><script src="//stats.wp.com/w.js?63" defer></script> <script type="text/javascript">
+_tkq = window._tkq || [];
+_stq = window._stq || [];
+_tkq.push(['storeContext', {'blog_id':'93232423','blog_tz':'2','user_lang':'en','blog_lang':'en','user_id':'0'}]);
+_stq.push(['view', {'blog':'93232423','v':'wpcom','tz':'2','user_id':'0','subd':'simonmartinblog'}]);
+_stq.push(['extra', {'crypt':'UE40eW5QN0p8M2Y/RE1mNzc2NTVTamdsd0xoLz9RQkM2K298TXY9bERQMXc2MjhEaVZfb2wwakRoSj0mUkp1THptM1NdbkV1WjZIcU9mVWQmPUIvMlN6Jk8wW3NYVEJ3dWZOWExuWD8lREQxc0ZEenBdU3ExbTNJODRNfkM/LSxJZ25ucS5RMHoxJWtPZkphK0xlV0lQeXJSZ0N5RHhUS20zYWVWbDV1QXRrbGkmbHolNHlEQnd3S3djR1FrWGlpWDdjJWgvbXA0XXFzRmpSXy5wVzBZfD9JNm03eVNwRSx1NVJKRGZMTFFOeD8lUzhRdlkmTXE3PXxOP0pXem9PWVd0bGkrayZdY3lJaTRaaVVkRVBEdklmRG8vbmczbn5RenYyOWZJdC1JKzN4W0E='}]);
+_stq.push([ 'clickTrackerInit', '93232423', '0' ]);
+	</script>
+<noscript><img src="https://pixel.wp.com/b.gif?v=noscript" style="height:1px;width:1px;overflow:hidden;position:absolute;bottom:1px;" alt="" /></noscript>
+<script>
+if ( 'object' === typeof wpcom_mobile_user_agent_info ) {
+
+	wpcom_mobile_user_agent_info.init();
+	var mobileStatsQueryString = "";
+	
+	if( false !== wpcom_mobile_user_agent_info.matchedPlatformName )
+		mobileStatsQueryString += "&x_" + 'mobile_platforms' + '=' + wpcom_mobile_user_agent_info.matchedPlatformName;
+	
+	if( false !== wpcom_mobile_user_agent_info.matchedUserAgentName )
+		mobileStatsQueryString += "&x_" + 'mobile_devices' + '=' + wpcom_mobile_user_agent_info.matchedUserAgentName;
+	
+	if( wpcom_mobile_user_agent_info.isIPad() )
+		mobileStatsQueryString += "&x_" + 'ipad_views' + '=' + 'views';
+
+	if( "" != mobileStatsQueryString ) {
+		new Image().src = document.location.protocol + '//pixel.wp.com/g.gif?v=wpcom-no-pv' + mobileStatsQueryString + '&baba=' + Math.random();
+	}
+	
+}
+</script>
+</body>
+</html>
